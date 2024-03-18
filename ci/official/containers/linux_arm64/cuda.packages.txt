@@ -1,6 +1,8 @@
 # CuDNN: https://docs.nvidia.com/deeplearning/sdk/cudnn-install/index.html#ubuntu-network-installation
 libcudnn8=8.9.6.50-1+cuda12.2
 libcudnn8-dev=8.9.6.50-1+cuda12.2
+libnvinfer-headers-dev=8.6.1.6-1+cuda12.0
+libnvinfer-headers-plugin-dev=8.6.1.6-1+cuda12.0
 
 # This can be removed once NVIDIA publishes a cuda-12.3.2 Docker image.
 # For now it ensures that we install at least version 12.3.107 of PTXAS,
