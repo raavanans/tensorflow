@@ -1,6 +1,7 @@
 # Description:
 #   Stubs for dynamically loading CUDA.
 
+load("@local_config_cuda//cuda:build_defs.bzl", "if_hermetic_cuda_libs")
 load(
     "@local_tsl//tsl/platform:rules_cc.bzl",
     "cc_library",
@@ -9,6 +10,10 @@ load(
     "@local_tsl//tsl/platform/default:cuda_build_defs.bzl",
     "cuda_rpath_flags",
     "if_cuda_is_configured",
+)
+load(
+    "//xla/tsl:tsl.bzl",
+    "if_oss",
 )
 load("//xla/tsl/cuda:stub.bzl", "cuda_stub")
 
@@ -41,7 +46,9 @@ cc_library(
         "@local_tsl//tsl/platform:dso_loader",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:load_library",
-    ]),
+    ]) + if_oss(if_hermetic_cuda_libs([
+        "@cuda_cublas//:cublas",
+    ])),
 )
 
 cuda_stub(
@@ -65,7 +72,9 @@ cc_library(
         "@local_tsl//tsl/platform:dso_loader",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:load_library",
-    ]),
+    ]) + if_oss(if_hermetic_cuda_libs([
+        "@cuda_cublas//:cublasLt",
+    ])),
 )
 
 cuda_stub(
@@ -126,7 +135,9 @@ cc_library(
             "@local_tsl//tsl/platform:logging",
         ],
         "//conditions:default": [],
-    }),
+    }) + if_oss(if_hermetic_cuda_libs([
+        "@cuda_cudart//:cudart",
+    ])),
 )
 
 cuda_stub(
@@ -152,7 +163,15 @@ cc_library(
         "@local_tsl//tsl/platform:dso_loader",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:load_library",
-    ]),
+    ]) + if_oss(if_hermetic_cuda_libs([
+        "@cuda_cudnn//:cudnn",
+        "@cuda_cudnn//:cudnn_ops_infer",
+        "@cuda_cudnn//:cudnn_cnn_infer",
+        "@cuda_cudnn//:cudnn_ops_train",
+        "@cuda_cudnn//:cudnn_cnn_train",
+        "@cuda_cudnn//:cudnn_adv_infer",
+        "@cuda_cudnn//:cudnn_adv_train",
+    ])),
 )
 
 cc_library(
@@ -189,7 +208,9 @@ cc_library(
         "@local_tsl//tsl/platform:dso_loader",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:load_library",
-    ]),
+    ]) + if_oss(if_hermetic_cuda_libs([
+        "@cuda_cufft//:cufft",
+    ])),
 )
 
 cuda_stub(
@@ -216,7 +237,9 @@ cc_library(
         "@local_tsl//tsl/platform:dso_loader",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:load_library",
-    ]),
+    ]) + if_oss(if_hermetic_cuda_libs([
+        "@cuda_cupti//:cupti",
+    ])),
 )
 
 cuda_stub(
@@ -241,7 +264,9 @@ cc_library(
         "@local_tsl//tsl/platform:dso_loader",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:load_library",
-    ]),
+    ]) + if_oss(if_hermetic_cuda_libs([
+        "@cuda_cusolver//:cusolver",
+    ])),
 )
 
 cuda_stub(
@@ -266,7 +291,10 @@ cc_library(
         "@local_tsl//tsl/platform:dso_loader",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:load_library",
-    ]),
+    ]) + if_oss(if_hermetic_cuda_libs([
+        "@cuda_cusparse//:cusparse",
+        "@cuda_nvjitlink//:nvjitlink",
+    ])),
 )
 
 cuda_stub(
@@ -293,5 +321,5 @@ cc_library(
         "@local_tsl//tsl/platform:dso_loader",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:load_library",
-    ]),
+    ]) + if_oss(if_hermetic_cuda_libs(["@cuda_nccl//:nccl"])),
 )

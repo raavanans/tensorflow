@@ -4,6 +4,7 @@ load("@bazel_skylib//lib:new_sets.bzl", "sets")
 load(
     "@local_config_cuda//cuda:build_defs.bzl",
     "if_cuda",
+    "if_hermetic_cuda_libs",
 )
 load(
     "//xla/tsl/mkl:build_defs.bzl",
@@ -336,7 +337,7 @@ def tf_openmp_copts():
         "//conditions:default": [],
     })
 
-def tsl_gpu_library(deps = None, cuda_deps = None, copts = tsl_copts(), **kwargs):
+def tsl_gpu_library(deps = None, cuda_deps = None, hermetic_cuda_deps = None, copts = tsl_copts(), **kwargs):
     """Generate a cc_library with a conditional set of CUDA dependencies.
 
     When the library is built with --config=cuda:
@@ -350,6 +351,8 @@ def tsl_gpu_library(deps = None, cuda_deps = None, copts = tsl_copts(), **kwargs
     Args:
       cuda_deps: BUILD dependencies which will be linked if and only if:
         '--config=cuda' is passed to the bazel command line.
+      hermetic_cuda_deps: BUILD dependencies which will be linked if and only if:
+        hermetic_cuda_configure rule is used.
       deps: dependencies which will always be linked.
       copts: copts always passed to the cc_library.
       **kwargs: Any other argument to cc_library.
@@ -358,9 +361,11 @@ def tsl_gpu_library(deps = None, cuda_deps = None, copts = tsl_copts(), **kwargs
         deps = []
     if not cuda_deps:
         cuda_deps = []
+    if not hermetic_cuda_deps:
+        hermetic_cuda_deps = []
 
     kwargs["features"] = kwargs.get("features", []) + ["-use_header_modules"]
-    deps = deps + if_cuda_or_rocm(cuda_deps)
+    deps = deps + if_cuda_or_rocm(cuda_deps) + if_oss(if_hermetic_cuda_libs(hermetic_cuda_deps))
     if "default_copts" in kwargs:
         copts = kwargs["default_copts"] + copts
         kwargs.pop("default_copts", None)

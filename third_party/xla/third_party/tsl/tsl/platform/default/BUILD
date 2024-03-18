@@ -65,6 +65,7 @@ cc_library(
     ],
     deps = [
         "//tsl/platform",
+        "//tsl/platform:env",
         "//tsl/platform:logging",
         "//tsl/platform:path",
         "//tsl/platform:types",
