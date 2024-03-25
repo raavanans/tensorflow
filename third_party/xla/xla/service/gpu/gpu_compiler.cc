@@ -132,6 +132,8 @@ limitations under the License.
 #include "xla/service/gpu/gemm_broadcast_folding_rewriter.h"
 #include "xla/service/gpu/gemm_fusion.h"
 #include "xla/service/gpu/gemm_rewriter.h"
+#include "xla/service/gpu/gemv_rewriter.h"
+#include "xla/service/gpu/gpu_algebraic_simplifier.h"
 #include "xla/service/gpu/gpu_all_gather_optimizer.h"
 #include "xla/service/gpu/gpu_async_collective_annotator.h"
 #include "xla/service/gpu/gpu_constants.h"
@@ -647,7 +649,8 @@ absl::Status RunSPMDPasses(
     HloPassPipeline& spmd_simplify =
         spmd_pipeline.AddPass<HloPassFix<HloPassPipeline>>("spmd-simplify");
 
-    spmd_simplify.AddPass<AlgebraicSimplifier>(layout_insensitive_algsimp_opts);
+    spmd_simplify.AddPass<GpuAlgebraicSimplifier>(
+        layout_insensitive_algsimp_opts);
 
     spmd_simplify.AddPass<SortSimplifier>();
     spmd_simplify.AddPass<TupleSimplifier>();
@@ -849,7 +852,7 @@ absl::Status RunOptimizationPasses(
     pipeline.AddPass<ScatterExpander>(
         ScatterExpander::kEliminateSimpleScatters);
     pipeline.AddPass<ScatterSliceSimplifier>();
-    pipeline.AddPass<AlgebraicSimplifier>(layout_insensitive_algsimp_opts);
+    pipeline.AddPass<GpuAlgebraicSimplifier>(layout_insensitive_algsimp_opts);
     pipeline.AddPass<BitcastDtypesExpander>();
     // AlgebraicSimplifier may add contracting dimensions to a dot.
     pipeline.AddPass<DotDimensionSorter>();
@@ -881,7 +884,7 @@ absl::Status RunOptimizationPasses(
   [&, &pipeline =
           pipeline.AddPass<HloPassFix<HloPassPipeline>>("simplification-2")] {
     pipeline.AddPass<ConvertMover>();
-    pipeline.AddPass<AlgebraicSimplifier>(layout_insensitive_algsimp_opts);
+    pipeline.AddPass<GpuAlgebraicSimplifier>(layout_insensitive_algsimp_opts);
   }();
 
   pipeline.AddPass<HloComputationDeduplicator>(
@@ -977,7 +980,7 @@ absl::Status RunCollectiveOptimizationPasses(
   // Run algebraic simplifier to reshape(broadcast) into a broadcast when
   // the reshape is just adding a unit dimension. This will help with the
   // AllGatherBroadcastReorder pass.
-  collectives_pipeline.AddPass<AlgebraicSimplifier>(
+  collectives_pipeline.AddPass<GpuAlgebraicSimplifier>(
       layout_insensitive_algsimp_opts);
 
   collectives_pipeline.AddPass<AllGatherBroadcastReorder>();
@@ -1185,7 +1188,7 @@ absl::Status RunPostFusionSimplificationPasses(
   HloPassPipeline pipeline("post-fusion-simplification-pipeline optimization");
   AlgebraicSimplifierOptions options = layout_insensitive_algsimp_opts;
   options.set_is_layout_sensitive(true);
-  pipeline.AddPass<AlgebraicSimplifier>(options);
+  pipeline.AddPass<GpuAlgebraicSimplifier>(options);
 
   // This invocation is used to populate deduplicated_name for fusions that
   // are considered duplicates according to the comparator in this pass.
@@ -1276,7 +1279,7 @@ absl::Status GpuCompiler::OptimizeHloModule(
         &NormalizeLayoutForGpuCustomCalls);
     // The LayoutAssignment pass may leave behind kCopy instructions which are
     // duplicate or NOPs, so remove them with algebraic simplification and CSE.
-    layout_normalization_pipeline.AddPass<HloPassFix<AlgebraicSimplifier>>(
+    layout_normalization_pipeline.AddPass<HloPassFix<GpuAlgebraicSimplifier>>(
         simplifier_options);
   }
   TF_RETURN_IF_ERROR(layout_normalization_pipeline.Run(hlo_module).status());
@@ -1376,7 +1379,7 @@ absl::Status GpuCompiler::OptimizeHloPostLayoutAssignment(
 
     // The LayoutAssignment pass may leave behind kCopy instructions which are
     // duplicate or NOPs, so remove them with algebraic simplification and CSE.
-    pipeline.AddPass<HloPassFix<AlgebraicSimplifier>>(simplifier_options);
+    pipeline.AddPass<HloPassFix<GpuAlgebraicSimplifier>>(simplifier_options);
 
     // GemmRewriter assumes that all transposes are folded into gemms, but,
     // since commit 7d529df, this is not always true at this point.
@@ -1412,8 +1415,13 @@ absl::Status GpuCompiler::OptimizeHloPostLayoutAssignment(
     pipeline.AddPass<GemmRewriter>(gpu_version, /*f8_rewrite=*/true);
     if (debug_options.xla_gpu_enable_triton_gemm() && cuda_cc != nullptr &&
         cuda_cc->IsAtLeast(se::CudaComputeCapability::AMPERE)) {
+      pipeline.AddPass<GemvRewriter>();
       pipeline.AddPass<GemmFusion>(gpu_version);
+      // Remove the trivial dimension introduced by GemvRewriter.
+      pipeline.AddPass<LayoutNormalization>(&NormalizeLayoutForGpuCustomCalls);
     }
+    // Strength-reduce matrix-vector dots that are not handled by GemmFusion.
+    pipeline.AddPass<AlgebraicSimplifier>(simplifier_options);
     // Rewrite non-FP8 GEMMs.
     pipeline.AddPass<GemmRewriter>(gpu_version, /*f8_rewrite=*/false);
 
@@ -1424,7 +1432,7 @@ absl::Status GpuCompiler::OptimizeHloPostLayoutAssignment(
       pipeline.AddPass<LayoutNormalization>(&NormalizeLayoutForGpuCustomCalls);
       // Remove any redundant operations (such as bitcasts) introduced by layout
       // normalization.
-      pipeline.AddPass<HloPassFix<AlgebraicSimplifier>>(simplifier_options);
+      pipeline.AddPass<HloPassFix<GpuAlgebraicSimplifier>>(simplifier_options);
     }
     pipeline.AddPass<BroadcastCanonicalizer>();
 
@@ -1437,7 +1445,7 @@ absl::Status GpuCompiler::OptimizeHloPostLayoutAssignment(
     if (debug_options.xla_gpu_enable_triton_softmax_fusion() &&
         cuda_cc != nullptr &&
         cuda_cc->IsAtLeast(se::CudaComputeCapability::AMPERE)) {
-      pipeline.AddPass<HloPassFix<AlgebraicSimplifier>>(simplifier_options);
+      pipeline.AddPass<HloPassFix<GpuAlgebraicSimplifier>>(simplifier_options);
       pipeline.AddPass<SoftmaxRewriterTriton>(gpu_version);
     }
 
@@ -1500,7 +1508,7 @@ absl::Status GpuCompiler::OptimizeHloPostLayoutAssignment(
 
   // The LayoutAssignment pass may leave behind kCopy instructions which are
   // duplicate or NOPs, so remove them with algebraic simplification and CSE.
-  pipeline.AddPass<HloPassFix<AlgebraicSimplifier>>(simplifier_options);
+  pipeline.AddPass<HloPassFix<GpuAlgebraicSimplifier>>(simplifier_options);
 
   if (debug_options.xla_allow_excess_precision() &&
       debug_options.xla_gpu_simplify_all_fp_conversions()) {
