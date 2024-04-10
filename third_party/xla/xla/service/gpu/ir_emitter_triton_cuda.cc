@@ -95,7 +95,7 @@ absl::Status CreateTritonPipeline(
 
   // Based on make_llir() in
   // @triton//:third_party/nvidia/backend/compiler.py
-  pm.addPass(mt::gpu::createDecomposeUnsupportedConversionsPass());
+  pm.addPass(mt::NVIDIA::createDecomposeUnsupportedConversionsPass());
   pm.addPass(mlir::createConvertSCFToCFPass());
   pm.addPass(mlir::createConvertIndexToLLVMPass());
   pm.addPass(mt::gpu::createAllocateSharedMemoryPass());

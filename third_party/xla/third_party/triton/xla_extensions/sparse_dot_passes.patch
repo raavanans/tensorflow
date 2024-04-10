@@ -176,7 +176,7 @@ diff --git a/lib/Dialect/TritonGPU/Transforms/AccelerateMatmul.cpp b/lib/Dialect
      switch (version) {
      case 2:
        return warpsPerTileV2(dotOp, shape, numWarps);
-@@ -337,6 +340,97 @@ public:
+@@ -337,6 +340,98 @@ public:
      return success();
    }
  };
@@ -214,8 +214,9 @@ diff --git a/lib/Dialect/TritonGPU/Transforms/AccelerateMatmul.cpp b/lib/Dialect
 +    int numWarps = ttg::TritonGPUDialect::getNumWarps(mod);
 +    auto CTALayout = ttg::getCTALayout(oldRetType.getEncoding());
 +
-+    auto instrShape = mmaVersionToInstrShape(
-+        versionMajor, retShapePerCTA, a.getType().cast<TensorOrMemDesc>());
++    auto instrShape =
++        mmaVersionToInstrShape(versionMajor, retShapePerCTA,
++                               a.getType().cast<TensorOrMemDesc>(), numWarps);
 +    auto warpsPerTile = BlockedToMMA::getWarpsPerTile(
 +        dotOp, retShapePerCTA, versionMajor, numWarps, instrShape);
 +    ttg::NvidiaMmaEncodingAttr mmaEnc =
