@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "tensorflow/compiler/mlir/lite/quantization/lite/quantize_model.h"
 
+#include <optional>
 #include <string>
 #include <unordered_set>
 
@@ -30,6 +31,7 @@ limitations under the License.
 #include "mlir/Pass/PassManager.h"  // from @llvm-project
 #include "mlir/Support/LogicalResult.h"  // from @llvm-project
 #include "tensorflow/compiler/mlir/lite/common/tfl_pass_config.h"
+#include "tensorflow/compiler/mlir/lite/debug/debug.h"
 #include "tensorflow/compiler/mlir/lite/flatbuffer_export.h"
 #include "tensorflow/compiler/mlir/lite/flatbuffer_import.h"
 #include "tensorflow/compiler/mlir/lite/ir/tfl_ops.h"
@@ -63,7 +65,8 @@ TfLiteStatus QuantizeModel(
     const absl::flat_hash_set<std::string>& denylisted_ops,
     const absl::flat_hash_set<std::string>& denylisted_nodes,
     const bool enable_variable_quantization,
-    bool disable_per_channel_for_dense_layers) {
+    bool disable_per_channel_for_dense_layers,
+    const std::optional<const toco::TocoFlags>& toco_flags) {
   // Translate TFLite names to mlir op names.
   absl::flat_hash_set<std::string> denylisted_mlir_op_names;
   for (const auto& entry : denylisted_ops) {
@@ -85,6 +88,10 @@ TfLiteStatus QuantizeModel(
 
   // Apply quantization passes.
   PassManager pm((*module)->getName(), OpPassManager::Nesting::Implicit);
+  if (toco_flags.has_value()) {
+    // Add debugging instrumentation
+    tensorflow::InitPassManager(pm, toco_flags->debug_options());
+  }
   quant::QuantizationSpecs quant_specs;
   quant_specs.inference_type = tflite::TflTypeToTfType(inference_type);
   quant_specs.post_training_quantization = true;

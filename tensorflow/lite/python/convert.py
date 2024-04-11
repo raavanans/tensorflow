@@ -231,6 +231,7 @@ def mlir_quantize(
     denylisted_nodes=None,
     enable_variable_quantization=False,
     disable_per_channel_for_dense_layers=False,
+    toco_flags_str="",
 ):
   """Quantize `input_data_str` with calibration results.
 
@@ -259,6 +260,9 @@ def mlir_quantize(
     disable_per_channel_for_dense_layers: Bool indicating whether to do
       per-channel or per-tensor quantization in Fully Connected layers. Default
       value is False meaning per-channel quantization is enabled.
+    toco_flags_str: Serialized proto describing TFLite converter properties, see
+      `toco/toco_flags.proto`. Currently only used to add debugging
+      instrumentation.
 
   Returns:
     Quantized model in serialized form (e.g. a TFLITE model) with floating-point
@@ -277,6 +281,7 @@ def mlir_quantize(
       denylisted_nodes,
       enable_variable_quantization,
       disable_per_channel_for_dense_layers,
+      toco_flags_str,
   )
 
 

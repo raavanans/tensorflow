@@ -23,6 +23,7 @@ limitations under the License.
 #include "tensorflow/lite/c/c_api_types.h"
 #include "tensorflow/lite/core/api/error_reporter.h"
 #include "tensorflow/lite/schema/schema_generated.h"
+#include "tensorflow/lite/toco/toco_flags.pb.h"
 
 namespace mlir {
 namespace lite {
@@ -55,7 +56,8 @@ TfLiteStatus QuantizeModel(
     const absl::flat_hash_set<std::string>& denylisted_ops = {},
     const absl::flat_hash_set<std::string>& denylisted_nodes = {},
     bool enable_variable_quantization = false,
-    bool disable_per_channel_for_dense_layers = false);
+    bool disable_per_channel_for_dense_layers = false,
+    const std::optional<const toco::TocoFlags>& toco_flags = std::nullopt);
 
 }  // namespace lite
 }  // namespace mlir
