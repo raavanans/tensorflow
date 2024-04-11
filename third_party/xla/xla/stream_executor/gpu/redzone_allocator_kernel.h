@@ -1,4 +1,4 @@
-/* Copyright 2019 The OpenXLA Authors.
+/* Copyright 2024 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,27 +13,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef XLA_STREAM_EXECUTOR_GPU_ASM_COMPILER_H_
-#define XLA_STREAM_EXECUTOR_GPU_ASM_COMPILER_H_
+#ifndef XLA_STREAM_EXECUTOR_GPU_REDZONE_ALLOCATOR_KERNEL_H_
+#define XLA_STREAM_EXECUTOR_GPU_REDZONE_ALLOCATOR_KERNEL_H_
 
 #include <cstdint>
-#include <string>
-#include <vector>
 
 #include "absl/status/statusor.h"
+#include "xla/stream_executor/device_memory.h"
+#include "xla/stream_executor/gpu/gpu_asm_opts.h"
+#include "xla/stream_executor/kernel.h"
+#include "xla/stream_executor/stream_executor.h"
 
 namespace stream_executor {
+using ComparisonKernel = TypedKernel<DeviceMemory<uint8_t>, uint8_t, uint64_t,
+                                     DeviceMemory<uint64_t>>;
 
-struct HsacoImage {
-  std::string gfx_arch;
-  std::vector<uint8_t> bytes;
-};
-
-// Bundles the GPU machine code (HSA Code Object) and returns the resulting
-// binary (i.e. a fatbin) as a byte array.
-absl::StatusOr<std::vector<uint8_t>> BundleGpuAsm(
-    std::vector<HsacoImage> images, const std::string rocm_root_dir);
+absl::StatusOr<const ComparisonKernel*> GetComparisonKernel(
+    StreamExecutor* executor, GpuAsmOpts gpu_asm_opts);
 
 }  // namespace stream_executor
 
-#endif  // XLA_STREAM_EXECUTOR_GPU_ASM_COMPILER_H_
+#endif  // XLA_STREAM_EXECUTOR_GPU_REDZONE_ALLOCATOR_KERNEL_H_

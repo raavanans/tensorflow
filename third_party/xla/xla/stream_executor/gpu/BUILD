@@ -453,31 +453,8 @@ gpu_only_cc_library(
         "@local_tsl//tsl/platform:status",
         "@local_tsl//tsl/platform:statusor",
         "@local_tsl//tsl/platform:subprocess",
-    ] + if_cuda_is_configured([
-        "//xla/stream_executor/cuda:cuda_driver",
-    ]) + if_rocm_is_configured([
+    ] + if_rocm_is_configured([
         "//xla/stream_executor/rocm:rocm_driver",
-    ]),
-)
-
-gpu_kernel_library(
-    name = "redzone_allocator_kernel",
-    srcs = if_gpu_is_configured(["redzone_allocator.cu.cc"]),
-    hdrs = if_gpu_is_configured(["redzone_allocator.h"]),
-    local_defines = if_cuda_is_configured(["GOOGLE_CUDA=1"]) + if_rocm_is_configured([
-        "TENSORFLOW_USE_ROCM=1",
-    ]),
-    deps = if_gpu_is_configured([
-        ":gpu_asm_opts",
-        "//xla/stream_executor:device_memory",
-        "//xla/stream_executor:device_memory_allocator",
-        "//xla/stream_executor",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:string_view",
-    ]) + if_cuda_is_configured([
-        "@local_config_cuda//cuda:cuda_headers",
-    ]) + if_rocm_is_configured([
-        "@local_config_rocm//rocm:rocm_headers",
     ]),
 )
 
@@ -485,22 +462,46 @@ gpu_only_cc_library(
     name = "redzone_allocator",
     srcs = ["redzone_allocator.cc"],
     hdrs = ["redzone_allocator.h"],
-    copts = tsl_copts(),
-    local_defines = if_cuda_is_configured(["GOOGLE_CUDA=1"]) + if_rocm_is_configured([
-        "TENSORFLOW_USE_ROCM=1",
-    ]),
+    cuda_deps = [
+        ":gpu_asm_opts",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:node_hash_map",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/types:span",
+        "@local_config_cuda//cuda:cuda_headers",
+        "//xla/stream_executor/cuda:cuda_asm_compiler",
+        "//xla/stream_executor/cuda:cuda_driver",
+        "//xla/stream_executor:device_memory",
+        "//xla/stream_executor:stream_executor_headers",
+        "@local_tsl//tsl/platform:statusor",
+    ],
+    cuda_srcs = ["redzone_allocator_kernel_cuda.cc"],
+    impl_hdrs = [
+        "redzone_allocator_kernel.h",
+    ],
+    rocm_deps = [
+        ":gpu_asm_opts",
+        "@com_google_absl//absl/status:statusor",
+        "//xla/stream_executor:device_memory",
+        "//xla/stream_executor:stream_executor_headers",
+        "@local_tsl//tsl/platform:statusor",
+    ],
+    rocm_srcs = ["redzone_allocator_kernel_rocm.cu.cc"],
     visibility = internal_visibility([
         "//xla/service/gpu:__subpackages__",
         "//xla/stream_executor:__subpackages__",
         "//tensorflow/core/kernels:__subpackages__",
     ]),
     deps = [
-        ":asm_compiler",
         ":gpu_asm_opts",
         "//xla/stream_executor",
         "//xla/stream_executor:device_memory",
         "//xla/stream_executor:device_memory_allocator",
-        "@com_google_absl//absl/base",
         "@com_google_absl//absl/container:fixed_array",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
@@ -508,19 +509,11 @@ gpu_only_cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/types:optional",
-        "@com_google_absl//absl/types:span",
         "@local_tsl//tsl/framework:allocator",
         "@local_tsl//tsl/lib/math:math_util",
         "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:logging",
-        "@local_tsl//tsl/platform:status",
         "@local_tsl//tsl/platform:statusor",
-    ] + if_rocm_is_configured([
-        ":redzone_allocator_kernel",
-    ]) + if_cuda_is_configured([
-        "//xla/stream_executor/cuda:cuda_asm_compiler",
-    ]),
+    ],
 )
 
 xla_cc_test(
