@@ -24,6 +24,7 @@ could not be copied over are accessed using the dependency inversion principle.
 import copy
 
 from tensorflow.python.eager import def_function
+from tensorflow.python.framework import tensor_spec
 from tensorflow.python.util import keras_deps
 from tensorflow.python.util import nest
 from tensorflow.python.util.compat import collections_abc
@@ -48,6 +49,27 @@ def _enforce_names_consistency(specs):
 
   if name_inconsistency:
     specs = nest.map_structure(_clear_name, specs)
+  return specs
+
+
+# Forked from keras export codebase.
+def get_save_spec(model):
+  """Returns the save spec of the model."""
+  shapes_dict = getattr(model, '_build_shapes_dict', None)
+  if not shapes_dict:
+    return None
+
+  if len(shapes_dict) == 1:
+    shape = list(shapes_dict.values())[0]
+    shape = (None,) + shape[1:]
+    return tensor_spec.TensorSpec(shape=shape, dtype=model.input_dtype)
+
+  specs = {}
+  for key, shape in shapes_dict.items():
+    key = key.removesuffix('_shape')
+    shape = (None,) + shape[1:]
+    specs[key] = tensor_spec.TensorSpec(shape=shape, dtype=model.input_dtype)
+
   return specs
 
 
