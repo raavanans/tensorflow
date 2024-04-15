@@ -1797,6 +1797,66 @@ TEST(XlaBuilderTest, DynamicBroadcastInDimIncompatibleBroadcastSize) {
                             "with size of result dimension 1 (3)")));
 }
 
+TEST(XlaBuilderTest, MhloDynamicReshapeExportSuccess) {
+  XlaBuilder b(TestName());
+  TF_ASSERT_OK_AND_ASSIGN(const Shape operand, ParseShape("f32[?, 15]"));
+  TF_ASSERT_OK_AND_ASSIGN(const Shape output_shape, ParseShape("s32[2]"));
+  TF_ASSERT_OK_AND_ASSIGN(const Shape shape, ParseShape("f32[?, 15]"));
+  TF_ASSERT_OK_AND_ASSIGN(const Shape expected, ParseShape("f32[?, 15]"));
+  MhloDynamicReshape(
+      /*operand=*/Parameter(&b, 0, operand, "operand"),
+      /*output_shape=*/Parameter(&b, 1, output_shape, "output_shape"),
+      /*shape=*/shape);
+  TF_ASSERT_OK_AND_ASSIGN(const auto module, BuildHloModule(b));
+  EXPECT_THAT(module->ToString(), HasSubstr("mhlo.dynamic_reshape"));
+  EXPECT_THAT(GetRoot(*module),
+              GmockMatch(m::Op().WithShapeEqualTo(&expected)));
+}
+
+TEST(XlaBuilderTest, MhloDynamicReshapeIncompatibleElementType) {
+  XlaBuilder b(TestName());
+  TF_ASSERT_OK_AND_ASSIGN(const Shape operand, ParseShape("f32[?, 15]"));
+  TF_ASSERT_OK_AND_ASSIGN(const Shape output_shape, ParseShape("s32[2]"));
+  TF_ASSERT_OK_AND_ASSIGN(const Shape shape, ParseShape("s32[?, 15]"));
+  MhloDynamicReshape(
+      /*operand=*/Parameter(&b, 0, operand, "operand"),
+      /*output_shape=*/Parameter(&b, 1, output_shape, "output_shape"),
+      /*shape=*/shape);
+  EXPECT_THAT(BuildHloModule(b),
+              StatusIs(_, HasSubstr("Element type of operand f32[?,15] and "
+                                    "output s32[?,15] must match")));
+}
+
+TEST(XlaBuilderTest, MhloDynamicReshapeElementCountMismatch) {
+  XlaBuilder b(TestName());
+  TF_ASSERT_OK_AND_ASSIGN(const Shape operand, ParseShape("f32[3, 15]"));
+  TF_ASSERT_OK_AND_ASSIGN(const Shape output_shape, ParseShape("s32[2]"));
+  TF_ASSERT_OK_AND_ASSIGN(const Shape shape, ParseShape("f32[4, 15]"));
+  MhloDynamicReshape(
+      /*operand=*/Parameter(&b, 0, operand, "operand"),
+      /*output_shape=*/Parameter(&b, 1, output_shape, "output_shape"),
+      /*shape=*/shape);
+  EXPECT_THAT(BuildHloModule(b),
+              StatusIs(_, HasSubstr("MhloDynamicReshape has mismatched "
+                                    "element counts: from=45 (f32[3,15]) "
+                                    "to=60 (f32[4,15])")));
+}
+
+TEST(XlaBuilderTest, MhloDynamicReshapeRankMismatch) {
+  XlaBuilder b(TestName());
+  TF_ASSERT_OK_AND_ASSIGN(const Shape operand, ParseShape("f32[?, 15]"));
+  TF_ASSERT_OK_AND_ASSIGN(const Shape output_shape, ParseShape("s32[3]"));
+  TF_ASSERT_OK_AND_ASSIGN(const Shape shape, ParseShape("f32[?, 15]"));
+  MhloDynamicReshape(
+      /*operand=*/Parameter(&b, 0, operand, "operand"),
+      /*output_shape=*/Parameter(&b, 1, output_shape, "output_shape"),
+      /*shape=*/shape);
+  EXPECT_THAT(
+      BuildHloModule(b),
+      StatusIs(_, HasSubstr("output_shape dimension size=3 (s32[3]) and rank "
+                            "of shape=2 (f32[?,15]) must match")));
+}
+
 //============================================================================//
 // Unbounded Dynamism Test
 //============================================================================//

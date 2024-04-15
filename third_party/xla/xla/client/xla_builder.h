@@ -551,6 +551,9 @@ class XlaBuilder {
                        absl::Span<const int64_t> new_size_bounds,
                        const std::vector<bool>& dims_are_dynamic);
 
+  XlaOp MhloDynamicReshape(XlaOp operand, XlaOp output_shape,
+                           const Shape& shape);
+
   XlaOp Collapse(XlaOp operand, absl::Span<const int64_t> dimensions);
 
   XlaOp Slice(XlaOp operand, absl::Span<const int64_t> start_indices,
@@ -1235,6 +1238,9 @@ class XlaBuilder {
   friend XlaOp DynamicReshape(XlaOp operand, absl::Span<const XlaOp> dim_sizes,
                               absl::Span<const int64_t> new_size_bounds,
                               const std::vector<bool>& dims_are_dynamic);
+
+  friend XlaOp MhloDynamicReshape(XlaOp operand, XlaOp output_shape,
+                                  const Shape& shape);
 
   friend XlaOp ReshapeWithInferredDimension(XlaOp operand,
                                             absl::Span<const int64_t> new_sizes,
@@ -1965,6 +1971,11 @@ XlaOp Reshape(XlaOp operand, absl::Span<const int64_t> dimensions,
 XlaOp DynamicReshape(XlaOp operand, absl::Span<const XlaOp> dim_sizes,
                      absl::Span<const int64_t> new_size_bounds,
                      const std::vector<bool>& dims_are_dynamic);
+
+// This is an experimental API for creating the mhlo.dynamic_reshape op from the
+// XlaBuilder. This is only intended for export to MHLO or StableHLO, and cannot
+// be compiled.
+XlaOp MhloDynamicReshape(XlaOp operand, XlaOp output_shape, const Shape& shape);
 
 // Enqueues an operation onto the computation that collapses the operand,
 // from first to last dimension (C order), then reshapes it to the given
