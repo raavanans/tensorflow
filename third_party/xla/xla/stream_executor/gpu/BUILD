@@ -319,31 +319,15 @@ gpu_only_cc_library(
 )
 
 gpu_only_cc_library(
-    name = "gpu_timer_kernel_header",
-    hdrs = ["gpu_timer_kernel.h"],
-)
-
-gpu_kernel_library(
-    name = "gpu_timer_kernel",
-    srcs = if_gpu_is_configured(["gpu_timer_kernel.cu.cc"]),
+    name = "gpu_semaphore",
+    srcs = ["gpu_semaphore.cc"],
+    hdrs = ["gpu_semaphore.h"],
     deps = [
-        ":gpu_timer_kernel_header",
-    ] + if_cuda_is_configured([
-        "@local_config_cuda//cuda:cuda_headers",
-    ]) + if_rocm_is_configured([
-        "@local_config_rocm//rocm:rocm_headers",
-    ]),
-)
-
-gpu_only_cc_library(
-    name = "gpu_timer_header",
-    hdrs = ["gpu_timer.h"],
-    deps = [
-        ":gpu_executor_header",
-        ":gpu_timer_kernel_header",
-        ":gpu_types_header",
+        "//xla/stream_executor:device_memory",
+        "//xla/stream_executor:memory_allocation",
+        "//xla/stream_executor:stream_executor_headers",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/time",
+        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
@@ -351,17 +335,30 @@ gpu_only_cc_library(
     name = "gpu_timer",
     srcs = ["gpu_timer.cc"],
     hdrs = ["gpu_timer.h"],
-    local_defines = if_cuda_is_configured(["GOOGLE_CUDA=1"]) + if_rocm_is_configured([
-        "TENSORFLOW_USE_ROCM=1",
-    ]),
+    cuda_deps = [
+        ":gpu_driver_header",
+        ":gpu_executor_header",
+        ":gpu_semaphore",
+        ":gpu_stream",
+        "@com_google_absl//absl/status:statusor",
+        "//xla/stream_executor:stream_executor_headers",
+    ],
+    cuda_srcs = ["gpu_timer_kernel_cuda.cu.cc"],
+    impl_hdrs = ["gpu_timer_kernel.h"],
+    rocm_deps = [
+        ":gpu_semaphore",
+        ":gpu_stream",
+        "@com_google_absl//absl/status:statusor",
+        "//xla/stream_executor:stream_executor_headers",
+    ],
+    rocm_srcs = ["gpu_timer_kernel_rocm.cc"],
     deps = [
         ":gpu_driver_header",
         ":gpu_executor_header",
+        ":gpu_semaphore",
         ":gpu_stream",
-        ":gpu_timer_kernel_header",
         ":gpu_types_header",
-        "//xla/stream_executor",
-        "//xla/stream_executor:stream_executor_interface",
+        "//xla/stream_executor:stream_executor_headers",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
@@ -371,15 +368,8 @@ gpu_only_cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/utility",
         "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:status",
         "@local_tsl//tsl/platform:statusor",
-    ] + if_gpu_is_configured([
-        ":gpu_timer_kernel",
-    ]) + if_cuda_is_configured([
-        "//xla/stream_executor/cuda:cuda_driver",
-    ]) + if_rocm_is_configured([
-        "//xla/stream_executor/rocm:rocm_driver",
-    ]),
+    ],
 )
 
 gpu_only_cc_library(

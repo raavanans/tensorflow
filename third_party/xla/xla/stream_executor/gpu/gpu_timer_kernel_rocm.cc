@@ -13,18 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef XLA_STREAM_EXECUTOR_GPU_GPU_TIMER_KERNEL_H_
-#define XLA_STREAM_EXECUTOR_GPU_GPU_TIMER_KERNEL_H_
-
-#include "absl/status/statusor.h"
-#include "xla/stream_executor/gpu/gpu_semaphore.h"
-#include "xla/stream_executor/gpu/gpu_stream.h"
-#include "xla/stream_executor/stream.h"
+#include "xla/stream_executor/gpu/gpu_timer_kernel.h"
 
 namespace stream_executor::gpu {
-absl::StatusOr<bool> DelayKernelIsSupported(GpuStream* stream);
 
-absl::StatusOr<GpuSemaphore> LaunchDelayKernel(Stream* stream);
+bool DelayKernelIsSupported() { return false; }
+
+absl::Status LaunchDelayKernel() {
+  return absl::UnimplementedError("Not implemented");
+}
+
 }  // namespace stream_executor::gpu
-
-#endif  // XLA_STREAM_EXECUTOR_GPU_GPU_TIMER_KERNEL_H_
