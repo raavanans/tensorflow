@@ -662,6 +662,7 @@ cc_library(
     hdrs = ["transforms/tpu_passes.h"],
     visibility = [":friends"] + if_google([
         "//learning/brain/tfrt/ifrt/pjrt/__subpackages__",
+        "//learning/serving/servables/tfrt:__subpackages__",
     ]),
     deps = [
         ":fallback_converter",
