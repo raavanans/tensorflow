@@ -760,6 +760,7 @@ cc_library(
         "@local_tsl//tsl/platform:status",
         "@local_tsl//tsl/platform:statusor",
         "//xla/tsl/util/proto:proto_utils",
+        "//xla/service/gpu:hlo_traversal",
     ]),
 )
 

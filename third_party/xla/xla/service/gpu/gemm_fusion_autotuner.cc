@@ -63,6 +63,7 @@ limitations under the License.
 #include "xla/service/gpu/gemm_rewriter.h"
 #include "xla/service/gpu/gpu_float_support.h"
 #include "xla/service/gpu/gpu_fusible.h"
+#include "xla/service/gpu/hlo_traversal.h"
 #include "xla/service/gpu/instruction_fusion.h"
 #include "xla/service/gpu/ir_emission_utils.h"
 #include "xla/service/gpu/matmul_utils.h"
@@ -110,6 +111,11 @@ namespace {
 
 // Minimum tile size.
 constexpr int kMinTileSize = 16;
+
+// Facing breakages when k-dimension is 16 for some cases. This is a bug in
+// Triton OSS.
+constexpr int kDimkMinTileSize = 32;
+constexpr std::array<int, 6> kDimkBlockSizes = {32, 64, 128, 256, 512};
 
 // Default tiling when autotuning is disabled.
 constexpr TritonGemmConfig kDefaultGemmTiling = {32, 32, 32, 1, 1, 4};
@@ -257,7 +263,8 @@ struct TileSizeLimit {
   int block_k = 0;
 };
 
-absl::StatusOr<TileSizeLimit> GetLimits(const HloDotInstruction& dot) {
+absl::StatusOr<TileSizeLimit> GetLimits(const HloDotInstruction& dot,
+                                        bool has_8_bit_operand) {
   TF_ASSIGN_OR_RETURN(int64_t non_contracting_index_lhs,
                       NonContractingDimensionIndex(dot, /*operand_number=*/0));
   TF_ASSIGN_OR_RETURN(int64_t non_contracting_index_rhs,
@@ -280,7 +287,8 @@ absl::StatusOr<TileSizeLimit> GetLimits(const HloDotInstruction& dot) {
   return TileSizeLimit{
       /*block_m=*/std::max(max_m, kMinTileSize),
       /*block_n=*/std::max(max_n, kMinTileSize),
-      /*block_k=*/std::max(max_k, kMinTileSize),
+      /*block_k=*/
+      std::max(max_k, has_8_bit_operand ? kDimkMinTileSize : kMinTileSize),
   };
 }
 
@@ -557,15 +565,30 @@ absl::StatusOr<std::vector<Config>> GemmFusionAutotunerImpl::GenerateConfigs(
 
 absl::StatusOr<std::vector<TritonGemmConfig>>
 GemmFusionAutotunerImpl::GenerateTritonConfigs(const HloDotInstruction& dot) {
+  HloInstructionAdaptor instr_adaptor{dot};
+  auto fusion_adaptor = HloFusionAdaptor::ForComputation(dot.parent());
+  // auto fusion_adaptor = HloFusionAdaptor::ForInstruction(&fusion);
+
+  // TODO(manany): Track this issue in an internal bug.
+  bool has_8_bit_operand = HloAnyOf(
+      instr_adaptor.GetOperands(), *fusion_adaptor,
+      [&](HloInstructionAdaptor node) {
+        if (node.opcode() != HloOpcode::kConvert) {
+          return false;
+        }
+        auto in_type = node.GetOperand(0).shape().element_type();
+        return (in_type == PrimitiveType::S8) || (in_type == PrimitiveType::U8);
+      });
+
   std::vector<TritonGemmConfig> result_configs;
-  TF_ASSIGN_OR_RETURN(TileSizeLimit limits, GetLimits(dot));
+  TF_ASSIGN_OR_RETURN(TileSizeLimit limits, GetLimits(dot, has_8_bit_operand));
 
   // Generate the list of configurations (once).
   if (triton_configs_.empty()) {
     triton_configs_ = !IsAutotuningEnabled()
                           ? std::vector(1, kDefaultGemmTiling)
                       : debug_options_.xla_gpu_exhaustive_tiling_search()
-                          ? GetExhaustiveTritonConfigs()
+                          ? GetExhaustiveTritonConfigs(has_8_bit_operand)
                           : GetDefaultTritonConfigs();
   }
 
@@ -860,12 +883,14 @@ absl::StatusOr<std::vector<AutotuneResult>> GemmFusionAutotunerImpl::Profile(
 }
 
 std::vector<TritonGemmConfig>
-GemmFusionAutotunerImpl::GetExhaustiveTritonConfigs() const {
+GemmFusionAutotunerImpl::GetExhaustiveTritonConfigs(
+    bool has_8_bit_operand) const {
   std::vector<TritonGemmConfig> configs;
   se::CudaComputeCapability cc = GetComputeCapability();
   bool tune_ctas =
       debug_options_.xla_gpu_enable_triton_hopper() && cc.IsAtLeastHopper();
 
+  auto kDimBlockSizes = has_8_bit_operand ? kDimkBlockSizes : kBlockSizes;
   for (int num_stages : kNumStages) {
     // Volta doesn't support num_stages > 2.
     if (!cc.IsAtLeastAmpere() && num_stages > 2) {
@@ -873,7 +898,7 @@ GemmFusionAutotunerImpl::GetExhaustiveTritonConfigs() const {
     }
     for (int tile_m : kBlockSizes) {
       for (int tile_n : kBlockSizes) {
-        for (int tile_k : kBlockSizes) {
+        for (int tile_k : kDimBlockSizes) {
           const int tile_lhs = tile_m * tile_k;
           const int tile_rhs = tile_k * tile_n;
           for (int num_warps : kNumWarps) {
