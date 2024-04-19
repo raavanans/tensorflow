@@ -143,7 +143,10 @@ py_strict_test(
         "@absl_py//absl/logging",
         "@absl_py//absl/testing:absltest",
         "@absl_py//absl/testing:parameterized",
-    ] + xla_py_test_deps(),
+    ] + if_google(
+        [":xla_gpu_extension"],
+        [],
+    ) + xla_py_test_deps(),
 )
 
 tsl_pybind_extension(
@@ -1182,16 +1185,45 @@ cc_library(
 )
 
 tsl_pybind_extension(
+    name = "xla_gpu_extension",
+    srcs = ["xla_gpu_support.cc"],
+    copts = [
+        "-fexceptions",
+        "-fno-strict-aliasing",
+    ],
+    features = ["-use_header_modules"],
+    pytype_deps = [],
+    pytype_srcs = [],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":logging",
+        ":nb_class_ptr",
+        ":py_client",
+        # placeholder for index annotation deps
+        "//third_party/nanobind",
+        "@local_config_python//:python_headers",  # buildcleaner: keep
+        "//xla/pjrt:pjrt_client",
+        "//xla/pjrt:status_casters",
+        "//xla/pjrt/distributed:key_value_store_interface",
+        "//xla/pjrt/gpu:gpu_helpers",
+        "//xla/pjrt/gpu:se_gpu_pjrt_client",
+    ],
+)
+
+tsl_pybind_extension(
     name = "xla_extension",
     srcs = ["xla.cc"],
     copts = [
         "-fexceptions",
         "-fno-strict-aliasing",
     ],
-    defines = select({
-        ":gpu_enabled": ["XLA_PYTHON_ENABLE_GPU=1"],
-        "//conditions:default": [],
-    }),
+    defines = if_google(
+        [],
+        select({
+            ":gpu_enabled": ["XLA_PYTHON_ENABLE_GPU=1"],
+            "//conditions:default": [],
+        }),
+    ),
     features = ["-use_header_modules"],
     linkopts = select({
         ":use_jax_cuda_pip_rpaths": [
@@ -1305,12 +1337,15 @@ tsl_pybind_extension(
         "//conditions:default": [
             "//xla/pjrt/cpu:mpi_collectives",
         ],
-    }) + select({
-        ":gpu_enabled": [
-            "//xla/pjrt/gpu:se_gpu_pjrt_client",
-        ],
-        "//conditions:default": [],
-    }) + select({
+    }) + if_google(
+        [],
+        select({
+            ":gpu_enabled": [
+                "//xla/pjrt/gpu:se_gpu_pjrt_client",
+            ],
+            "//conditions:default": [],
+        }),
+    ) + select({
         ":link_gpu_plugin": [
             ":gpu_plugin_deps",
         ],
