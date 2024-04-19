@@ -501,6 +501,10 @@ absl::StatusOr<tsl::RCReference<Array>> PjRtArray::Reshard(
             "first fetched to the host and then sent to the destination "
             "device.");
       }
+      if (!pjrt_device->IsAddressable()) {
+        return InvalidArgument("Cannot copy array to non-addressable device %s",
+                               pjrt_device->DebugString());
+      }
       // Use `PjRtBuffer::CopyToMemorySpace` instead of
       // `PjRtBuffer::CopyToDevice` when memories are supported. Because the
       // semantics of the latter one is to copy to the default memory space of
