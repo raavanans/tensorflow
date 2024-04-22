@@ -1055,6 +1055,12 @@ class _TupleWrapper(TrackableDataStructure, wrapt.ObjectProxy):
   def __deepcopy__(self, memo):
     return _TupleWrapper(copy.deepcopy(self.__wrapped__, memo))
 
+  @property
+  def __dict__(self):
+    # Override the TrackableDataStructure dict forwarding and go back to
+    # the wrapt implementation.
+    return self.__wrapped__.__dict__
+
   def __reduce_ex__(self, protocol):
     return (self.__class__,
             (self.__wrapped__,))
