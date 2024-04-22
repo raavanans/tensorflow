@@ -442,6 +442,111 @@ ENTRY main {
   EXPECT_FALSE(HaveRemainingOffloadAnnotations(module.get()));
 }
 
+TEST_F(HostOffloaderTest, NoOpToHost) {
+  const std::string& hlo_string = R"(
+HloModule my_module
+ENTRY main {
+  data_param = f32[2048] parameter(0)
+  offload_custom_call_0 = f32[2048] custom-call(data_param), custom_call_target="MoveToHost"
+  offload_custom_call_1 = f32[2048] custom-call(offload_custom_call_0), custom_call_target="MoveToHost"
+  ROOT load_custom_call = f32[2048] custom-call(offload_custom_call_1), custom_call_target="MoveToDevice"
+}
+)";
+
+  TF_ASSERT_OK_AND_ASSIGN(auto module,
+                          ParseAndReturnVerifiedModule(hlo_string));
+
+  TF_ASSERT_OK_AND_ASSIGN(bool changed, RunHostOffloader(module.get()));
+
+  EXPECT_TRUE(changed);
+
+  // Look for the following pattern:
+  // param
+  //   |
+  // copy (to host)
+  //   |
+  // copy (to device)
+
+  HloInstruction* param;
+  HloInstruction* copy_to_host;
+  HloInstruction* copy_to_device;
+  ASSERT_THAT(
+      module->entry_computation()->root_instruction(),
+      GmockMatch(m::Copy(&copy_to_device,
+                         m::Copy(&copy_to_host, m::Parameter(&param, 0)))));
+  TestShapeHasMemorySpace(param->shape(), Layout::kDefaultMemorySpace);
+  TestShapeHasMemorySpace(copy_to_host->shape(), kHostMemorySpaceColor);
+  TestShapeHasMemorySpace(copy_to_device->shape(), Layout::kDefaultMemorySpace);
+
+  EXPECT_FALSE(HaveRemainingOffloadAnnotations(module.get()));
+}
+
+TEST_F(HostOffloaderTest, NoOpToDeviceAlreadyOnDevice) {
+  const std::string& hlo_string = R"(
+HloModule my_module
+ENTRY main {
+  data_param = f32[2048] parameter(0)
+  ROOT load_custom_call = f32[2048] custom-call(data_param), custom_call_target="MoveToDevice"
+}
+)";
+
+  TF_ASSERT_OK_AND_ASSIGN(auto module,
+                          ParseAndReturnVerifiedModule(hlo_string));
+
+  TF_ASSERT_OK_AND_ASSIGN(bool changed, RunHostOffloader(module.get()));
+
+  EXPECT_TRUE(changed);
+
+  // Look for the following pattern:
+  // param
+
+  HloInstruction* param;
+  ASSERT_THAT(module->entry_computation()->root_instruction(),
+              GmockMatch(m::Parameter(&param, 0)));
+  TestShapeHasMemorySpace(param->shape(), Layout::kDefaultMemorySpace);
+
+  EXPECT_FALSE(HaveRemainingOffloadAnnotations(module.get()));
+}
+
+TEST_F(HostOffloaderTest, NoOpToDeviceSecondLoad) {
+  const std::string& hlo_string = R"(
+HloModule my_module
+ENTRY main {
+  data_param = f32[2048] parameter(0)
+  offload_custom_call = f32[2048] custom-call(data_param), custom_call_target="MoveToHost"
+  load_custom_call_0 = f32[2048] custom-call(offload_custom_call), custom_call_target="MoveToDevice"
+  ROOT load_custom_call_1 = f32[2048] custom-call(load_custom_call_0), custom_call_target="MoveToDevice"
+}
+)";
+
+  TF_ASSERT_OK_AND_ASSIGN(auto module,
+                          ParseAndReturnVerifiedModule(hlo_string));
+
+  TF_ASSERT_OK_AND_ASSIGN(bool changed, RunHostOffloader(module.get()));
+
+  EXPECT_TRUE(changed);
+
+  // Look for the following pattern:
+  // param
+  //   |
+  // copy (to host)
+  //   |
+  // copy (to device)
+
+  HloInstruction* param;
+  HloInstruction* copy_to_host;
+  HloInstruction* copy_to_device;
+  ASSERT_THAT(
+      module->entry_computation()->root_instruction(),
+      GmockMatch(m::Copy(&copy_to_device,
+                         m::Copy(&copy_to_host, m::Parameter(&param, 0)))));
+  TestShapeHasMemorySpace(param->shape(), Layout::kDefaultMemorySpace);
+  TestShapeHasMemorySpace(copy_to_host->shape(), kHostMemorySpaceColor);
+  TestShapeHasMemorySpace(copy_to_device->shape(), Layout::kDefaultMemorySpace);
+
+  EXPECT_FALSE(HaveRemainingOffloadAnnotations(module.get()));
+}
+
 TEST_F(HostOffloaderTest, NoCopyWithOptBarrier) {
   const std::string& hlo_string = R"(
 HloModule my_module
@@ -2281,6 +2386,39 @@ TEST_F(HostOffloaderTest, OutputStreamingCustomCallRoot) {
   TestShapeHasMemorySpace(broadcast_1->shape(), Layout::kDefaultMemorySpace);
   TestShapeHasMemorySpace(multiply_2->shape(), Layout::kDefaultMemorySpace);
   TestShapeHasMemorySpace(copy->shape(), kHostMemorySpaceColor);
+
+  EXPECT_FALSE(HaveRemainingOffloadAnnotations(module.get()));
+}
+
+TEST_F(HostOffloaderTest, ParameterStreamingNoOpToHost) {
+  const std::string& hlo_string = R"(
+HloModule ParameterStreaming, entry_computation_layout={(s32[2,1]{1,0:T(2,128)S(5)})->s32[2,1]{1,0:T(2,128)}}
+
+ENTRY main {
+  param = s32[2,1]{1,0} parameter(0)
+  to_host = s32[2,1]{1,0} custom-call(param), custom_call_target="MoveToHost"
+  ROOT to_device = s32[2,1]{1,0} custom-call(to_host), custom_call_target="MoveToDevice"
+}
+)";
+
+  TF_ASSERT_OK_AND_ASSIGN(auto module,
+                          ParseAndReturnVerifiedModule(hlo_string));
+
+  TF_ASSERT_OK_AND_ASSIGN(bool changed, RunHostOffloader(module.get()));
+
+  EXPECT_TRUE(changed);
+  LOG(INFO) << module->ToString();
+
+  // Look for the following pattern:
+  //    param
+  //      |
+  // copy(to device)
+  HloInstruction* param;
+  HloInstruction* copy;
+  ASSERT_THAT(module->entry_computation()->root_instruction(),
+              GmockMatch(m::Copy(&copy, m::Parameter(&param, 0))));
+  TestShapeHasMemorySpace(param->shape(), kHostMemorySpaceColor);
+  TestShapeHasMemorySpace(copy->shape(), Layout::kDefaultMemorySpace);
 
   EXPECT_FALSE(HaveRemainingOffloadAnnotations(module.get()));
 }
