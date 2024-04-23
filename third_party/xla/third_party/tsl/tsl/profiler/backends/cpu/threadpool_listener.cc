@@ -17,6 +17,7 @@ limitations under the License.
 #include <cstdint>
 #include <memory>
 
+#include "absl/base/no_destructor.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "tsl/platform/logging.h"
@@ -33,7 +34,8 @@ namespace tsl {
 namespace profiler {
 namespace {
 
-void RegisterThreadpoolEventCollector(ThreadpoolEventCollector* collector) {
+void RegisterThreadpoolEventCollector(
+    const ThreadpoolEventCollector* collector) {
   tracing::SetEventCollector(tracing::EventCategory::kScheduleClosure,
                              collector);
   tracing::SetEventCollector(tracing::EventCategory::kRunClosure, collector);
@@ -75,8 +77,8 @@ absl::Status ThreadpoolProfilerInterface::Start() {
         "ThreadPool.");
     return absl::OkStatus();
   }
-  event_collector_ = std::make_unique<ThreadpoolEventCollector>();
-  RegisterThreadpoolEventCollector(event_collector_.get());
+  static const absl::NoDestructor<ThreadpoolEventCollector> event_collector;
+  RegisterThreadpoolEventCollector(event_collector.get());
   threadpool_listener::Activate();
   return absl::OkStatus();
 }

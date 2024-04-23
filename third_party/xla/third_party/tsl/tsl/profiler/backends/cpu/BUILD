@@ -151,6 +151,7 @@ cc_library(
         "//tsl/profiler/lib:traceme_encode",
         "//tsl/profiler/utils:time_utils",
         "//tsl/profiler/utils:xplane_schema",
+        "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
     ],
