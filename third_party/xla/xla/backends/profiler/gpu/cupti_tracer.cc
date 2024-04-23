@@ -30,6 +30,7 @@ limitations under the License.
 #include "tsl/platform/host_info.h"
 #include "tsl/platform/logging.h"
 #include "tsl/platform/macros.h"
+#include "tsl/platform/mem.h"
 #include "tsl/profiler/backends/cpu/annotation_stack.h"
 
 namespace xla {
@@ -513,8 +514,8 @@ void AddCuMemAllocEventUponApiExit(CuptiTraceCollector *collector,
   event.correlation_id = cbdata->correlationId;
   event.memalloc_info.address = reinterpret_cast<uintptr_t>(dptr);
   event.memalloc_info.num_bytes = params->bytesize;
-  VLOG(3) << "Cuda MemAlloc API exit."
-          << " dptr=" << dptr << " sz=" << params->bytesize;
+  VLOG(3) << "Cuda MemAlloc API exit." << " dptr=" << dptr
+          << " sz=" << params->bytesize;
   collector->AddEvent(std::move(event));
 }
 
@@ -537,8 +538,8 @@ void AddCuMemAllocPitchEventUponApiExit(
   const size_t size_in_bytes = *params->pPitch * params->Height;
   event.memalloc_info.address = reinterpret_cast<uintptr_t>(dptr);
   event.memalloc_info.num_bytes = size_in_bytes;
-  VLOG(3) << "Cuda MemAllocPitch API exit."
-          << " dptr=" << dptr << " sz=" << size_in_bytes;
+  VLOG(3) << "Cuda MemAllocPitch API exit." << " dptr=" << dptr
+          << " sz=" << size_in_bytes;
   collector->AddEvent(std::move(event));
 }
 
@@ -560,8 +561,8 @@ void AddCuMemAllocManagedEventUponApiExit(
   event.correlation_id = cbdata->correlationId;
   event.memalloc_info.address = reinterpret_cast<uintptr_t>(dptr);
   event.memalloc_info.num_bytes = params->bytesize;
-  VLOG(3) << "Cuda MemAllocManaged API exit."
-          << " dptr=" << dptr << " sz=" << params->bytesize;
+  VLOG(3) << "Cuda MemAllocManaged API exit." << " dptr=" << dptr
+          << " sz=" << params->bytesize;
   collector->AddEvent(std::move(event));
 }
 
@@ -584,8 +585,8 @@ void AddCuMemAllocHostEventUponApiExit(CuptiTraceCollector *collector,
   event.correlation_id = cbdata->correlationId;
   event.memalloc_info.address = reinterpret_cast<uintptr_t>(*params->pp);
   event.memalloc_info.num_bytes = params->bytesize;
-  VLOG(3) << "Cuda MemAllocHost API exit."
-          << " pp=" << *params->pp << " sz=" << params->bytesize;
+  VLOG(3) << "Cuda MemAllocHost API exit." << " pp=" << *params->pp
+          << " sz=" << params->bytesize;
   collector->AddEvent(std::move(event));
 }
 
@@ -608,9 +609,8 @@ void AddCuMemHostAllocEventUponApiExit(CuptiTraceCollector *collector,
   event.correlation_id = cbdata->correlationId;
   event.memalloc_info.address = reinterpret_cast<uintptr_t>(*params->pp);
   event.memalloc_info.num_bytes = params->bytesize;
-  VLOG(3) << "Cuda MemHostAlloc API exit."
-          << " pp=" << *params->pp << " sz=" << params->bytesize
-          << " Flags=" << params->Flags;
+  VLOG(3) << "Cuda MemHostAlloc API exit." << " pp=" << *params->pp
+          << " sz=" << params->bytesize << " Flags=" << params->Flags;
   collector->AddEvent(std::move(event));
 }
 
@@ -632,8 +632,7 @@ void AddCuMemFreeEventUponApiExit(CuptiTraceCollector *collector,
   event.context_id = cbdata->contextUid;
   event.correlation_id = cbdata->correlationId;
   event.memfree_info.address = reinterpret_cast<uintptr_t>(dptr);
-  VLOG(3) << "Cuda MemFree API exit."
-          << " dptr=" << dptr;
+  VLOG(3) << "Cuda MemFree API exit." << " dptr=" << dptr;
   collector->AddEvent(std::move(event));
 }
 
@@ -654,8 +653,7 @@ void AddCuMemFreeHostEventUponApiExit(CuptiTraceCollector *collector,
   event.context_id = cbdata->contextUid;
   event.correlation_id = cbdata->correlationId;
   event.memfree_info.address = reinterpret_cast<uintptr_t>(params->p);
-  VLOG(3) << "Cuda MemFreeHost API exit."
-          << " p=" << params->p;
+  VLOG(3) << "Cuda MemFreeHost API exit." << " p=" << params->p;
   collector->AddEvent(std::move(event));
 }
 
@@ -677,9 +675,8 @@ void AddCuMemHostRegisterEventUponApiExit(
   event.host_register_info.address = reinterpret_cast<uintptr_t>(params->p);
   event.host_register_info.num_bytes = params->bytesize;
   event.host_register_info.flags = params->Flags;
-  VLOG(3) << "Cuda HostRegister API exit."
-          << " p=" << params->p << " bytesize=" << params->bytesize
-          << " flags=" << params->Flags;
+  VLOG(3) << "Cuda HostRegister API exit." << " p=" << params->p
+          << " bytesize=" << params->bytesize << " flags=" << params->Flags;
   collector->AddEvent(std::move(event));
 }
 
@@ -699,8 +696,7 @@ void AddCuMemHostUnregisterEventUponApiExit(
   event.context_id = cbdata->contextUid;
   event.correlation_id = cbdata->correlationId;
   event.host_unregister_info.address = reinterpret_cast<uintptr_t>(params->p);
-  VLOG(3) << "Cuda HostUnregister API exit."
-          << " p=" << params->p;
+  VLOG(3) << "Cuda HostUnregister API exit." << " p=" << params->p;
   collector->AddEvent(std::move(event));
 }
 
@@ -718,8 +714,7 @@ void AddGenericEventUponApiExit(CuptiTraceCollector *collector,
   event.device_id = device_id;
   event.context_id = cbdata->contextUid;
   event.correlation_id = cbdata->correlationId;
-  VLOG(3) << "Observed generic API exit."
-          << " name=" << cbdata->functionName;
+  VLOG(3) << "Observed generic API exit." << " name=" << cbdata->functionName;
   collector->AddEvent(std::move(event));
 }
 
@@ -1264,6 +1259,22 @@ void CuptiTracer::Disable() {
   cupti_interface_->CleanUp();
   Finalize().IgnoreError();
   cupti_driver_api_hook_->SyncAndFlush().IgnoreError();
+
+  std::list<ActivityBufferAndSize> activity_buffers;
+  {
+    tsl::mutex_lock lock(activity_buffers_mutex_);
+    activity_buffers = std::move(activity_buffers_);
+  }
+  collector_->OnTracerCachedActivityBuffers(std::move(activity_buffers));
+  if (cupti_dropped_activity_event_count_ > 0) {
+    collector_->OnEventsDropped("Activity Event dropped by Cupti Lib:",
+                                cupti_dropped_activity_event_count_);
+  }
+  if (num_activity_events_in_dropped_buffer_ > 0) {
+    collector_->OnEventsDropped("Activity Event dropped in dropped buffer:",
+                                num_activity_events_in_dropped_buffer_);
+  }
+
   collector_->Flush();
   collector_ = nullptr;
   option_.reset();
@@ -1325,9 +1336,17 @@ Status CuptiTracer::DisableApiTracing() {
 }
 
 Status CuptiTracer::EnableActivityTracing() {
+  if (activity_tracing_enabled_) return OkStatus();
+  PrepareActivityStart();
   if (!option_->activities_selected.empty()) {
     // Initialize callback functions for Cupti Activity API.
     VLOG(1) << "Registering CUPTI activity callbacks";
+    if (auto err = cupti_interface_->ActivityUsePerThreadBuffer();
+        err != CUPTI_SUCCESS) {
+      LOG(WARNING) << "Fail to use per-thread activity buffer, cupti trace "
+                      "overhead may be big. CUPTI ERROR CODE:"
+                   << err;
+    }
     RETURN_IF_CUPTI_ERROR(cupti_interface_->ActivityRegisterCallbacks(
         RequestCuptiActivityBuffer, ProcessCuptiActivityBuffer));
 
@@ -1501,10 +1520,112 @@ void CuptiTracer::RequestActivityBuffer(uint8_t **buffer, size_t *size) {
   *size = buffer_pool_.GetBufferSizeInBytes();
 }
 
+static Status ConvertActivityBuffer(CuptiTraceCollector *collector,
+                                    uint8_t *buffer, size_t size,
+                                    size_t &total_activity_event_count,
+                                    size_t &dropped_activity_event_count) {
+  CuptiInterface *cupti_interface = GetCuptiInterface();
+  const size_t max_activity_event_count =
+      collector->options_.max_activity_api_events;
+  CUpti_Activity *record = nullptr;
+  while (true) {
+    CUptiResult status =
+        cupti_interface->ActivityGetNextRecord(buffer, size, &record);
+    if (status == CUPTI_SUCCESS) {
+      if (total_activity_event_count >= max_activity_event_count) {
+        dropped_activity_event_count++;
+        continue;
+      }
+      total_activity_event_count++;
+      switch (record->kind) {
+        case CUPTI_ACTIVITY_KIND_KERNEL:  // sequential
+        case CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL:
+          AddKernelActivityEvent<TF_CUPTI_HAS_CHANNEL_ID>(
+              collector, reinterpret_cast<CuptiActivityKernelTy *>(record));
+          break;
+        case CUPTI_ACTIVITY_KIND_CDP_KERNEL:
+          AddKernelActivityEvent<false>(
+              collector, reinterpret_cast<CUpti_ActivityCdpKernel *>(record));
+          break;
+        case CUPTI_ACTIVITY_KIND_MEMCPY:
+          AddMemcpyActivityEvent(
+              collector, reinterpret_cast<CuptiActivityMemcpyTy *>(record));
+          break;
+        case CUPTI_ACTIVITY_KIND_MEMCPY2:
+          AddMemcpyP2PActivityEvent(
+              collector, reinterpret_cast<CuptiActivityMemcpyP2PTy *>(record));
+          break;
+        case CUPTI_ACTIVITY_KIND_OVERHEAD:
+          AddCuptiOverheadActivityEvent(
+              collector, reinterpret_cast<CUpti_ActivityOverhead *>(record));
+          break;
+        case CUPTI_ACTIVITY_KIND_UNIFIED_MEMORY_COUNTER:
+          AddUnifiedMemoryActivityEvent(
+              collector,
+              reinterpret_cast<CUpti_ActivityUnifiedMemoryCounter2 *>(record));
+          break;
+        case CUPTI_ACTIVITY_KIND_MEMORY: {
+          AddMemoryActivityEvent(
+              collector, reinterpret_cast<CUpti_ActivityMemory *>(record));
+        } break;
+        case CUPTI_ACTIVITY_KIND_MEMSET:
+          AddMemsetActivityEvent(
+              collector, reinterpret_cast<CuptiActivityMemsetTy *>(record));
+          break;
+        case CUPTI_ACTIVITY_KIND_SYNCHRONIZATION:
+          AddSynchronizationActivityEvent(
+              collector,
+              reinterpret_cast<CUpti_ActivitySynchronization *>(record));
+          break;
+        default:
+          VLOG(3) << "Activity type " << record->kind << " is not supported.";
+          break;
+      }
+    } else if (status == CUPTI_ERROR_MAX_LIMIT_REACHED) {
+      // Normal, just reach the end of the valid activity events.
+      break;
+    } else {
+      LOG(WARNING) << "CUPTI parse ACTIVITY buffer error: " << status;
+      return tsl::errors::Internal("Parse cupti activity buffer error.");
+    }
+  }
+  VLOG(3) << "CUPTI tracer post-process one ACTIVITY buffer of size: " << size
+          << ", total events count:" << total_activity_event_count;
+  return OkStatus();
+}
+
+// To make the destruction more natural, BufferPool may need refactor.
+// TODO: As such refactor on BufferPool may impact wide range, and is
+// not core logic here, we will do it separately later.
+ActivityBufferAndSize::ActivityBufferAndSize(uint8_t *p, size_t sz)
+    : buffer(p,
+             [](uint8_t *p) {
+               if (p != nullptr) tsl::port::AlignedFree(p);
+             }),
+      size(sz) {}
+
+static size_t CountCuptiActivityEvent(uint8_t *buffer, size_t size) {
+  size_t total_event_count = 0;
+  if (size == 0 || buffer == nullptr) return total_event_count;
+  CuptiInterface *cupti_interface = GetCuptiInterface();
+  CUpti_Activity *record = nullptr;
+  while (true) {
+    if (CUPTI_SUCCESS ==
+        cupti_interface->ActivityGetNextRecord(buffer, size, &record)) {
+      ++total_event_count;
+    } else {
+      break;
+    }
+  }
+  return total_event_count;
+}
+
 Status CuptiTracer::ProcessActivityBuffer(CUcontext context, uint32_t stream_id,
                                           uint8_t *buffer, size_t size) {
-  absl::Cleanup buffer_cleanup = [&]() { buffer_pool_.ReclaimBuffer(buffer); };
-  if (size == 0) {
+  absl::Cleanup buffer_cleanup = [&]() {
+    if (buffer) buffer_pool_.ReclaimBuffer(buffer);
+  };
+  if (size == 0 || buffer == nullptr) {
     return OkStatus();
   }
   if (!activity_tracing_enabled_) {
@@ -1513,71 +1634,33 @@ Status CuptiTracer::ProcessActivityBuffer(CUcontext context, uint32_t stream_id,
   }
   if (cupti_interface_->Disabled()) return tsl::errors::Internal("Disabled.");
 
-  CUpti_Activity *record = nullptr;
-  while (true) {
-    CUptiResult status =
-        cupti_interface_->ActivityGetNextRecord(buffer, size, &record);
-    if (status == CUPTI_SUCCESS) {
-      switch (record->kind) {
-        case CUPTI_ACTIVITY_KIND_KERNEL:  // sequential
-        case CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL:
-          AddKernelActivityEvent<TF_CUPTI_HAS_CHANNEL_ID>(
-              collector_, reinterpret_cast<CuptiActivityKernelTy *>(record));
-          break;
-        case CUPTI_ACTIVITY_KIND_CDP_KERNEL:
-          AddKernelActivityEvent<false>(
-              collector_, reinterpret_cast<CUpti_ActivityCdpKernel *>(record));
-          break;
-        case CUPTI_ACTIVITY_KIND_MEMCPY:
-          AddMemcpyActivityEvent(
-              collector_, reinterpret_cast<CuptiActivityMemcpyTy *>(record));
-          break;
-        case CUPTI_ACTIVITY_KIND_MEMCPY2:
-          AddMemcpyP2PActivityEvent(
-              collector_, reinterpret_cast<CuptiActivityMemcpyP2PTy *>(record));
-          break;
-        case CUPTI_ACTIVITY_KIND_OVERHEAD:
-          AddCuptiOverheadActivityEvent(
-              collector_, reinterpret_cast<CUpti_ActivityOverhead *>(record));
-          break;
-        case CUPTI_ACTIVITY_KIND_UNIFIED_MEMORY_COUNTER:
-          AddUnifiedMemoryActivityEvent(
-              collector_,
-              reinterpret_cast<CUpti_ActivityUnifiedMemoryCounter2 *>(record));
-          break;
-        case CUPTI_ACTIVITY_KIND_MEMORY: {
-          AddMemoryActivityEvent(
-              collector_, reinterpret_cast<CUpti_ActivityMemory *>(record));
-        } break;
-        case CUPTI_ACTIVITY_KIND_MEMSET:
-          AddMemsetActivityEvent(
-              collector_, reinterpret_cast<CuptiActivityMemsetTy *>(record));
-          break;
-        case CUPTI_ACTIVITY_KIND_SYNCHRONIZATION:
-          AddSynchronizationActivityEvent(
-              collector_,
-              reinterpret_cast<CUpti_ActivitySynchronization *>(record));
-          break;
-        default:
-          VLOG(3) << "Activity type " << record->kind << " is not supported.";
-          break;
-      }
-    } else if (status == CUPTI_ERROR_MAX_LIMIT_REACHED) {
-      break;
-    } else {
-      return tsl::errors::Internal("Parse cupti activity buffer error.");
-    }
+  // Report dropped records.
+  size_t dropped = 0;
+  if (CUPTI_SUCCESS == cupti_interface_->ActivityGetNumDroppedRecords(
+                           context, stream_id, &dropped)) {
+    cupti_dropped_activity_event_count_ += dropped;
   }
 
-  // Report dropped records.
-  size_t dropped;
-  RETURN_IF_CUPTI_ERROR(cupti_interface_->ActivityGetNumDroppedRecords(
-      context, stream_id, &dropped));
-  if (dropped != 0) {
-    uint32_t device_id = -1;
-    RETURN_IF_CUPTI_ERROR(cupti_interface_->GetDeviceId(context, &device_id));
-    collector_->OnEventsDropped("cupti activity buffer full", dropped);
+  size_t event_count_in_buffer = CountCuptiActivityEvent(buffer, size);
+  auto max_activity_event_count = collector_->options_.max_activity_api_events;
+  if (max_activity_event_count > 0 &&
+      num_activity_events_in_cached_buffer_ >= max_activity_event_count) {
+    LOG(WARNING) << "Already too many activity events, drop the buffer of "
+                 << size << "bytes of event to reuse.";
+    num_activity_events_in_dropped_buffer_ += event_count_in_buffer;
+    // buffer will be return to the pool
+    return OkStatus();
   }
+  num_activity_events_in_cached_buffer_ += event_count_in_buffer;
+
+  // When cupti activity buffer is required to flush, save the buffer and its
+  // valid size some where. All the saved activity buffer will be handled
+  // after the profiling is stopped.
+  VLOG(3) << "Caching CUPTI activity buffer of size:" << size;
+  tsl::mutex_lock lock(activity_buffers_mutex_);
+  activity_buffers_.emplace_back(buffer, size);
+  buffer = nullptr;  // So cleanup will not free it as it was saved already
+
   return OkStatus();
 }
 
@@ -1592,6 +1675,33 @@ Status CuptiTracer::ProcessActivityBuffer(CUcontext context, uint32_t stream_id,
         "Failed to load libcupti (is it installed and accessible?)");
   }
   return "";
+}
+
+void CuptiTracer::PrepareActivityStart() {
+  tsl::mutex_lock lock(activity_buffers_mutex_);
+  activity_buffers_.clear();
+  cupti_dropped_activity_event_count_ = 0;
+  num_activity_events_in_cached_buffer_ = 0;
+  num_activity_events_in_dropped_buffer_ = 0;
+}
+
+void ProcessCachedCuptiActivityBuffers(
+    CuptiTraceCollector *collector,
+    std::list<ActivityBufferAndSize> &activity_buffers) {
+  size_t total_activity_event_count = 0;
+  size_t dropped_activity_event_count = 0;
+  while (!activity_buffers.empty()) {
+    ActivityBufferAndSize buffer_and_size(std::move(activity_buffers.front()));
+    activity_buffers.pop_front();
+    ConvertActivityBuffer(collector, buffer_and_size.buffer.get(),
+                          buffer_and_size.size, total_activity_event_count,
+                          dropped_activity_event_count)
+        .IgnoreError();
+  }
+  if (dropped_activity_event_count > 0) {
+    collector->OnEventsDropped("total device(activity) events reaches max",
+                               dropped_activity_event_count);
+  }
 }
 
 }  // namespace profiler

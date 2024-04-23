@@ -335,8 +335,7 @@ class PerDeviceCollector {
         continue;
       }
       auto* plane = is_host_event ? host_plane : device_plane;
-      VLOG(9) << "Event"
-              << " type=" << static_cast<int>(event.type)
+      VLOG(9) << "Event" << " type=" << static_cast<int>(event.type)
               << " line_id=" << line_id
               << (is_host_event ? " host plane=" : " device plane=")
               << plane->Name();
@@ -498,6 +497,11 @@ AnnotationMap::AnnotationInfo AnnotationMap::LookUp(uint32_t device_id,
                                                     : AnnotationInfo();
 }
 
+void CuptiTraceCollector::OnTracerCachedActivityBuffers(
+    std::list<ActivityBufferAndSize> activity_buffers) {
+  ProcessCachedCuptiActivityBuffers(this, activity_buffers);
+}
+
 // CuptiTraceCollectorImpl store the CuptiTracerEvents from CuptiTracer and
 // eventually convert and filter them to XSpace.
 class CuptiTraceCollectorImpl : public CuptiTraceCollector {
@@ -534,9 +538,17 @@ class CuptiTraceCollectorImpl : public CuptiTraceCollector {
     absl::MutexLock lock(&mutex_);
     dropped_events_[reason] += num_events;
   }
+
+  void OnTracerCachedActivityBuffers(
+      std::list<ActivityBufferAndSize> activity_buffers) override {
+    activity_buffers_ = std::move(activity_buffers);
+  }
+
   void Flush() override {}
   // Returns true if some GPU events are captured.
   bool Export(XSpace* space, uint64_t end_gpu_ns) override {
+    ProcessCachedCuptiActivityBuffers(this, activity_buffers_);
+
     LOG(INFO) << " GpuTracer has collected " << num_callback_events_
               << " callback api events and " << num_activity_events_
               << " activity events. " << ReportDroppedEvents();
@@ -547,8 +559,8 @@ class CuptiTraceCollectorImpl : public CuptiTraceCollector {
       std::string name = GpuPlaneName(device_ordinal);
       XPlaneBuilder device_plane(FindOrAddMutablePlaneWithName(space, name));
       device_plane.SetId(device_ordinal);
-      VLOG(4) << "Creating plane for"
-              << " name=" << name << " ordinal=" << device_ordinal;
+      VLOG(4) << "Creating plane for" << " name=" << name
+              << " ordinal=" << device_ordinal;
 
       // Calculate device capabilities before flushing, so that device
       // properties are available to the occupancy calculator in Flush().
@@ -585,6 +597,7 @@ class CuptiTraceCollectorImpl : public CuptiTraceCollector {
  private:
   std::atomic<int> num_callback_events_;
   std::atomic<int> num_activity_events_;
+  std::list<ActivityBufferAndSize> activity_buffers_;
   absl::Mutex mutex_;
   absl::flat_hash_map<std::string, uint64_t> dropped_events_
       ABSL_GUARDED_BY(mutex_);
