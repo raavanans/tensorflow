@@ -353,6 +353,21 @@ ENTRY e {
   EXPECT_TRUE(RunAndCompare(hlo, ErrorSpec{/*aabs=*/1e-2, /*arel=*/1e-2}));
 }
 
+TEST_F(GemmFusionAutotunerTest, PredWithBF16DotProducesCorrectResult) {
+  const std::string hlo = R"(
+HloModule module
+
+ENTRY e {
+  p0 = pred[8,640]{1,0} parameter(0)
+  cvt = bf16[8,640]{1,0} convert(pred[8,640]{1,0} p0)
+  p1 = bf16[4096,640]{1,0} parameter(1)
+  ROOT dot.10277 = bf16[8,4096]{1,0} dot(cvt, p1), lhs_contracting_dims={1}, rhs_contracting_dims={1}
+}
+)";
+
+  EXPECT_TRUE(RunAndCompare(hlo, ErrorSpec{/*aabs=*/1e-2, /*arel=*/1e-2}));
+}
+
 TEST_F(GemmFusionAutotunerTest, SelectsSplitK) {
   // Shapes with K >> M, N have to force split-K configurations.
   const std::string kHloText = R"(
