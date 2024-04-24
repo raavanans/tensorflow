@@ -503,7 +503,7 @@ void CoordinationServiceStandaloneImpl::Stop(bool shut_staleness_thread) {
   }
   {
     mutex_lock l(state_mu_);
-    for (auto& [barrier_id, barrier] : barriers_) {
+    for (auto [barrier_id, barrier] : barriers_) {
       if (!barrier.passed) {
         absl::Status error = MakeCoordinationError(errors::Aborted(absl::StrCat(
             "Barrier failed because service is shutting down. Barrier_id: ",
@@ -1028,8 +1028,37 @@ void CoordinationServiceStandaloneImpl::BarrierAsync(
     const CoordinatedTask& task,
     const std::vector<CoordinatedTask>& participating_tasks,
     StatusCallback done) {
-  VLOG(3) << "Task " << GetTaskName(task) << "invoked BarrierAsync("
+  VLOG(3) << "Task " << GetTaskName(task) << " invoked BarrierAsync("
           << barrier_id << ").";
+
+  // Check if caller task is participating in the barrier. If not, do not
+  // mutate `barriers_`. Instead, set the task to error state and propagate this
+  // to all other tasks.
+  bool among_participating_tasks = false;
+  const std::string source_task_name = GetTaskName(task);
+  for (const auto& task : participating_tasks) {
+    const std::string task_name = GetTaskName(task);
+
+    {
+      if (source_task_name == task_name) {
+        among_participating_tasks = true;
+        break;
+      }
+    }
+  }
+  if (!participating_tasks.empty() && !among_participating_tasks) {
+    const std::string task_name = GetTaskName(task);
+    absl::Status error = MakeCoordinationError(errors::InvalidArgument(
+        absl::StrCat("A non-participating task (", GetTaskName(task),
+                     ") called the barrier: ", barrier_id)));
+    {
+      mutex_lock l(state_mu_);
+      SetTaskError(task_name, error);
+    }
+    done(error);
+    PropagateError(task);
+    return;
+  }
   mutex_lock l(state_mu_);
   auto pair = barriers_.try_emplace(barrier_id);
   auto it = pair.first;
@@ -1116,16 +1145,6 @@ void CoordinationServiceStandaloneImpl::BarrierAsync(
 
   // Add pending callbacks.
   barrier->done_callbacks.push_back(done);
-
-  // Check if caller task is participating in the barrier.
-  if (!barrier->tasks_at_barrier.contains(task)) {
-    // Unexpected barrier call from a task not participating in the barrier.
-    absl::Status error = MakeCoordinationError(errors::InvalidArgument(
-        absl::StrCat("A non-participating task (", GetTaskName(task),
-                     ") called the barrier: ", barrier_id)));
-    PassBarrier(barrier_id, error, barrier);
-    return;
-  }
 
   // Check if task args are specified consistently across barrier calls.
   if (!ValidateTaskArgs(participating_tasks, barrier->tasks_at_barrier,

@@ -959,8 +959,10 @@ TEST_F(CoordinationBarrierTest, BarrierByNonParticipatingTask) {
       /*participating_tasks=*/{GetTask(0), GetTask(1)},
       [&barrier_status_1](absl::Status s) { barrier_status_1 = s; });
 
-  // Barrier should fail for all tasks with the unexpected call.
-  EXPECT_TRUE(absl::IsInvalidArgument(barrier_status_0));
+  // Barrier should fail for participating task only if the other task has a
+  // gRPC client because that's how the error is propagated.
+  TF_EXPECT_OK(barrier_status_0);
+  // Barrier should fail for non-participating task with the unexpected call.
   EXPECT_TRUE(absl::IsInvalidArgument(barrier_status_1));
 }
 
