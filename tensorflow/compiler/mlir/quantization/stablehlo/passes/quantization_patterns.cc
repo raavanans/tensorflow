@@ -526,12 +526,22 @@ class QuantizeSingularOpPattern : public EntryFuncBodyQuantizationPattern {
 
   LogicalResult match(func::FuncOp entry_func_op,
                       const Method& quantization_method) const override {
+    if (!quantization_method.has_static_range_ptq()) {
+      return failure();
+    }
     const auto op_iterator_range = entry_func_op.getOps<SingularOpT>();
     if (op_iterator_range.empty()) {
       LLVM_DEBUG(llvm::dbgs() << "Function does not have "
                               << SingularOpT::getOperationName() << " op.\n");
       return failure();
     }
+
+    const StringRef op_name =
+        (*(op_iterator_range.begin())).getOperationName().split('.').second;
+    if (!entry_func_op.getSymName().contains(op_name)) {
+      return failure();
+    }
+
     if (!isa<RankedTensorType>(
             (*op_iterator_range.begin()).getResult().getType())) {
       LLVM_DEBUG(llvm::dbgs() << SingularOpT::getOperationName()
