@@ -79,6 +79,10 @@ template <PrimitiveType dtype, size_t rank = internal::kDynamicRank>
 struct Buffer {
   se::DeviceMemory<internal::NativeType<dtype>> data;
   absl::Span<const int64_t> dimensions;
+
+  // Returns pointer to the native data
+  internal::NativeType<dtype>* NativeData() { return data.Data(); }
+  const internal::NativeType<dtype>* NativeData() const { return data.Data(); }
 };
 
 // clang-format off
