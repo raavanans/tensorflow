@@ -714,6 +714,29 @@ class MsaAlgorithm : public GlobalDecreasingSizeBestFitHeap<HloValue> {
   bool IsUseAllowedInAlternateMemory(const AllocationValue& value,
                                      const HloUse& use) const;
 
+  AliasedOffset* UpdatePreferredOffsetForUse(
+      const AllocationValue::Use& use, AliasedOffset* preferred_offset) const;
+
+  void UpdatePreferredOfsetForComputation(
+      const AllocationValue& allocation_value, const AllocationValue::Use& use,
+      int64_t& use_time, const absl::Span<AllocationValue>& allocation_values,
+      absl::flat_hash_map<const HloComputation*, AliasedOffset*>&
+          preferred_offset_for_computation);
+
+  AllocationRequest CreateAllocationRequest(
+      AllocationValue& allocation_value, const AllocationValue::Use& use,
+      const AllocationValue::Use* previous_use, AliasedOffset* preferred_offset,
+      const int64_t& definition_time,
+      const bool& require_no_copy_alternate_mem_allocation,
+      const std::vector<int64_t>& all_use_times);
+
+  Result AllocateAllocationValueUse(
+      AllocationValue& allocation_value, AllocationValue::Use& use,
+      AliasedOffset* preferred_offset, const AllocationValue::Use* previous_use,
+      std::vector<int64_t>& all_use_times, int64_t& definition_time,
+      bool& require_no_copy_alternate_mem_allocation,
+      AllocationRequest& request);
+
   // Finds allocations for allocation values generated from colocated intervals.
   // All of the allocation values have a must-alias relationship with each
   // other. Returns either kSuccess if all of the sites could be placed in the
