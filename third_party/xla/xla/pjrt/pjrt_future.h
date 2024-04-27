@@ -21,11 +21,9 @@ limitations under the License.
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <type_traits>
 #include <utility>
 
-#include "absl/base/optimization.h"
 #include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
@@ -100,6 +98,22 @@ struct PjRtFutureHelpers {
 };
 
 namespace internal {
+
+// TODO(b/337054455): We are in the process of migrating PjRtFuture to implicit
+// StatusOr payload type and while we are doing this we introduce a little bit
+// of template metaprogramming to detect PjRtFutures with absl::StatusOr
+// specializations as a value type.
+template <typename T>
+struct IsStatusOr : public std::false_type {
+  using Type = T;
+};
+template <typename T>
+struct IsStatusOr<absl::StatusOr<T>> : public std::true_type {
+  using Type = T;
+};
+
+template <typename T>
+inline constexpr bool is_status_or_v = IsStatusOr<T>::value;  // NOLINT
 
 // A base class to conditionally disable copy constructor and assignment for a
 // PjRtFuture<T> (by default we always disable copy constructor when `T` is not
@@ -199,16 +213,6 @@ class PjRtFutureBase : public PjRtFutureMoveControl<
 
     explicit Promise(tsl::AsyncValueRef<T> ref) : ref_(std::move(ref)) {}
 
-    void SetStateConcrete() {
-      DCHECK(ref_) << "Promise must wrap an async value";
-      ref_.SetStateConcrete();
-    }
-
-    void SetError(absl::Status error) {
-      DCHECK(ref_) << "Promise must wrap an async value";
-      ref_.SetError(std::move(error));
-    }
-
     template <typename... Args>
     void emplace(Args&&... args) const {
       DCHECK(ref_) << "Promise must wrap an async value";
@@ -249,6 +253,11 @@ class PjRtFutureBase : public PjRtFutureMoveControl<
       : promise_(std::move(promise)),
         on_block_start_(std::move(on_block_start)),
         on_block_end_(std::move(on_block_end)) {}
+
+  PjRtFutureBase(T t, PjRtFutureHelpers::OnBlockStartFn on_block_start,
+                 PjRtFutureHelpers::OnBlockEndFn on_block_end)
+      : PjRtFutureBase(tsl::MakeAvailableAsyncValueRef<T>(std::move(t)),
+                       std::move(on_block_start), std::move(on_block_end)) {}
 
   tsl::AsyncValuePtr<T> promise() const { return promise_.AsPtr(); }
 
@@ -312,6 +321,10 @@ class PjRtFuture : public internal::PjRtFutureBase<T> {
   static_assert(!std::is_same_v<T, absl::Status>,
                 "Use PjRtFuture<> specialization for stateless futures");
 
+  // TODO(b/337054455): Disable PjRtFuture for StatusOr<T> specializations.
+  // static_assert(internal::is_status_or_v<T>,
+  //               "PjRtFuture<T> already has an implicit StatusOr semantics");
+
  public:
   class Promise : public Base::Promise {
    public:
@@ -365,6 +378,7 @@ class PjRtFuture : public internal::PjRtFutureBase<T> {
   // Blocks the calling thread until the future is ready, then returns the
   // final value.
   const T& Await() & {
+    CHECK(Base::IsValid());
     Base::BlockUntilReady();
     DCHECK(Base::promise().IsConcrete());
     return *Base::promise();
@@ -373,6 +387,7 @@ class PjRtFuture : public internal::PjRtFutureBase<T> {
   // Blocks the calling thread until the future is ready, then returns the
   // final value.
   const T& Await() const& {
+    CHECK(Base::IsValid());
     Base::BlockUntilReady();
     DCHECK(Base::promise().IsConcrete());
     return *Base::promise();
@@ -381,6 +396,7 @@ class PjRtFuture : public internal::PjRtFutureBase<T> {
   // Blocks the calling thread until the future is ready, then returns the
   // final value.
   std::conditional_t<Base::is_unique(), T, const T&> Await() && {
+    CHECK(Base::IsValid());
     Base::BlockUntilReady();
     DCHECK(Base::promise().IsConcrete());
 
@@ -444,8 +460,8 @@ class PjRtFuture : public internal::PjRtFutureBase<T> {
 //
 // See PjRtFuture<T> documentation above for more details.
 template <>
-class PjRtFuture<void> : public internal::PjRtFutureBase<std::nullopt_t> {
-  using Base = internal::PjRtFutureBase<std::nullopt_t>;
+class PjRtFuture<void> : public internal::PjRtFutureBase<absl::Status> {
+  using Base = internal::PjRtFutureBase<absl::Status>;
 
  public:
   class Promise : public Base::Promise {
@@ -459,11 +475,7 @@ class PjRtFuture<void> : public internal::PjRtFutureBase<std::nullopt_t> {
     // After Set is called, completion event will be delivered to waiters on the
     // PjRtFuture constructed from a promise, via blocking or callbacks.
     void Set(absl::Status status = absl::OkStatus()) {
-      if (ABSL_PREDICT_TRUE(status.ok())) {
-        Base::Promise::SetStateConcrete();
-      } else {
-        Base::Promise::SetError(std::move(status));
-      }
+      Base::Promise::emplace(std::move(status));
     }
   };
 
@@ -472,8 +484,7 @@ class PjRtFuture<void> : public internal::PjRtFutureBase<std::nullopt_t> {
   //
   // Used by clients that do not use TSL concurrency library.
   static Promise CreatePromise() {
-    return Promise(
-        tsl::MakeConstructedAsyncValueRef<std::nullopt_t>(std::nullopt));
+    return Promise(tsl::MakeUnconstructedAsyncValueRef<absl::Status>());
   }
 
   PjRtFuture() = default;
@@ -482,10 +493,8 @@ class PjRtFuture<void> : public internal::PjRtFutureBase<std::nullopt_t> {
   // is already successfully completed. Error means that future is already
   // completed with an error.
   explicit PjRtFuture(absl::Status status)
-      : Base(status.ok()
-                 ? tsl::MakeAvailableAsyncValueRef<std::nullopt_t>(std::nullopt)
-                 : tsl::MakeErrorAsyncValueRef(std::move(status)),
-             /*on_block_start=*/nullptr, /*on_block_end=*/nullptr) {}
+      : Base(std::move(status), /*on_block_start=*/nullptr,
+             /*on_block_end=*/nullptr) {}
 
   // Constructor for an unavailable PjRtFuture that will be resolved later by
   // setting the promise completed.
@@ -503,8 +512,8 @@ class PjRtFuture<void> : public internal::PjRtFutureBase<std::nullopt_t> {
   absl::Status Await() {
     CHECK(Base::IsValid());
     Base::BlockUntilReady();
-    return Base::promise().IsError() ? Base::promise().GetError()
-                                     : absl::OkStatus();
+    DCHECK(Base::promise().IsConcrete());
+    return *Base::promise();
   }
 
   // Registers callback to be called once the future is ready.
@@ -515,7 +524,11 @@ class PjRtFuture<void> : public internal::PjRtFutureBase<std::nullopt_t> {
   // client-owned threadpool.
   void OnReady(absl::AnyInvocable<void(absl::Status)> callback) const {
     CHECK(Base::IsValid());
-    Base::promise().AndThen(std::move(callback));
+    Base::promise().AndThen(
+        [promise = Base::promise(), callback = std::move(callback)]() mutable {
+          DCHECK(promise.IsConcrete());
+          callback(promise.get());
+        });
   }
 };
 
