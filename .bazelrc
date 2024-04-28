@@ -136,6 +136,9 @@ build --incompatible_enforce_config_setting_visibility
 
 # Default options should come above this line.
 
+# Add MLIR V1 optimization pass configuration
+build --config=mlir_v1
+
 # Android configs. Bazel needs to have --cpu and --fat_apk_cpu both set to the
 # target CPU to build transient dependencies correctly. See
 # https://docs.bazel.build/versions/master/user-manual.html#flag--fat_apk_cpu
