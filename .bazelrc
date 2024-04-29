@@ -72,6 +72,9 @@
 
 # Default build options. These are applied first and unconditionally.
 
+# Add MLIR V1 optimization pass configuration
+build --config=mlir_v1
+
 # For projects which use TensorFlow as part of a Bazel build process, putting
 # nothing in a bazelrc will default to a monolithic build. The following line
 # opts in to modular op registration support by default.
@@ -136,8 +139,6 @@ build --incompatible_enforce_config_setting_visibility
 
 # Default options should come above this line.
 
-# Add MLIR V1 optimization pass configuration
-build --config=mlir_v1
 
 # Android configs. Bazel needs to have --cpu and --fat_apk_cpu both set to the
 # target CPU to build transient dependencies correctly. See
